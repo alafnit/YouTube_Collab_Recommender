@@ -8,7 +8,7 @@
    to be most_similar.'''
 
 
-import pandas as import pd
+import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -35,7 +35,7 @@ class Scoreboard(object):
            also appends y to df as a new entry.'''
 
         self.df = df
-        if y:
+        if type(y) == type(pd.DataFrame()):
             self.find_similar(y)
 
 
@@ -47,13 +47,10 @@ class Scoreboard(object):
            scores between y and df. Also calculates the rank of each entry in df
            from most to least similar. Assumes df has been fitted to Scoreboard.'''
 
-        if len(y.split(',')) > 1:
-            print 'Please only use one ID.'\
-        else:
-            self.y = y
-            self._update()
-            self.scores = self._calc_scores()
-            self.df_ranked_idx = np.argsort(self.scores)[0][::-1]
+        self.y = y
+        self._update()
+        self._calc_scores()
+        self.df_ranked_idx = np.argsort(self.scores)[0][::-1]
 
 
     def _update(self):
@@ -62,7 +59,7 @@ class Scoreboard(object):
            to updating, it is replaced with the newer information.'''
 
         self.df.drop(np.where(self.df['title'] == self.y['title'][0])[0])
-        self.df.append(self.y):
+        self.df.append(self.y)
 
 
     def fit_from(self, filepath):
@@ -72,7 +69,7 @@ class Scoreboard(object):
            Fits a df into the Scoreboard directly from the given filepath. This
            method does not support simultaneous y fitting.'''
 
-        self.df = pd.read_csv(filepath).drop('Unnamed: 0', axis=1)
+        self.df = pd.read_csv(filepath, encoding='utf-8').drop('Unnamed: 0', axis=1)
 
 
     def most_similar(self, k1=10, k2=None):
@@ -90,8 +87,8 @@ class Scoreboard(object):
            If k2 is given, most_similar returns k1 - k2 channels ranging between
            the ranks of k1 and k2 when k1 < k2.'''
 
-        ignored_idx = np.where(df['title'] == y['title'][0])[0][0]
-        argsort_scores = np.delete(np.argsort(self.scores)[0][::-1], ignored_idx)
+        ignored_idx = np.where(self.df['title'] == self.y['title'][0])[0][0]
+        argsort_scores = np.delete(self.df_ranked_idx, ignored_idx)
         if k2:
             return self.df['title'][argsort_scores[k1:k2]].values
         else:
