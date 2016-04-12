@@ -228,3 +228,28 @@ def _write_user(userId):
     df = get_specific_channel(userId)
     df = unpack_topics(df)
     df.to_csv('../data/YT_'+userId+'_data.csv', encoding='utf-8')
+
+def match_topics(X, y):
+
+    '''INPUT: DataFrame, DataFrame
+       OUTPUT: DataFrame, DataFrame
+       ---
+       Unpacks the topics of y to match the format of the current X. If y has a
+       topic not yet present in X, that topic is added to X. Returns the results
+       of this unpacking, in this order: X, then y. Assumes that y has a 'topics'
+       column and X does not.'''
+
+    X_new = X.copy()
+    y_new = y.copy()
+    for topic in X_new.columns[5:]:
+        y_new[topic] = 0
+    for row in y_new['topics']:
+        for i, topic in enumerate(row):
+            try:
+                y_new[topic][i] = 1
+            except:
+                y_new[topic] = 0
+                y_new[topic][i] = 1
+                X_new[topic] = 0
+    y_new = y_new.drop('topics', axis=1)
+    return X_new, y_new
