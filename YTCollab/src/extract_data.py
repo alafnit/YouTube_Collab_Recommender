@@ -9,6 +9,8 @@ import sys
 import numpy as np
 import pandas as pd
 from apiclient.discovery import build
+from collections import Counter
+import time
 
 def _channel_categories():
 
@@ -52,8 +54,9 @@ def get_channel_data(category):
 
     df = pd.DataFrame()
     nextPage = None
+    sections = "id,snippet,contentDetails,statistics,topicDetails,brandingSettings"
     for _ in xrange(100):
-        results = youtube.channels().list(part="snippet,statistics,topicDetails",
+        results = youtube.channels().list(part=sections,
                                           categoryId=d[category],
                                           maxResults=50,
                                           pageToken=nextPage).execute()
@@ -89,16 +92,19 @@ def process_channel(youtube, channel):
        row created from said dictionary.'''
 
     row = {}
+    row['id'] = channel["id"]
     row['title'] = channel["snippet"]["title"]
+    row['desc'] = channel["snippet"]["description"]
     try:
         row['country'] = channel["snippet"]["country"]
     except:
         row['country'] = 'n/a'
+    row['banner'] = channel["brandingSettings"]["image"]["bannerMobileExtraHdImageUrl"]
     row['subs'] = int(channel["statistics"]["subscriberCount"])
     row['videos'] = int(channel["statistics"]["videoCount"])
     row['views'] = int(channel["statistics"]["viewCount"])
     row['topics'] = [channel_topics(youtube, channel)]
-    cols = ['title','country','subs','videos','views','topics']
+    cols = ['id','title','desc','country','banner','subs','videos','views','topics']
     return pd.DataFrame(row, columns=cols)
 
 
@@ -116,12 +122,23 @@ def channel_topics(youtube, channel):
         topics.extend(channel["topicDetails"]["topicIds"])
     except:
         pass
-    playlists = youtube.playlists().list(part='id',
+    """playlists = youtube.playlists().list(part='id',
                                          channelId=channel['id'],
                                          maxResults=5).execute()
     for playlist in playlists['items']:
         topics.extend(sample_playlist(youtube, playlist['id']))
-    return list(set(topics))
+    return Counter(topics)"""
+    """videos = youtube.search().list(part='id',
+                                   channelId=channel['id'],
+                                   order='date',
+                                   type='video',
+                                   maxResults=25).execute()
+    videoIds = ','.join([vid['id']['videoId'] for vid in videos['items']])
+    topics.extend(sample_videos(youtube, videoIds))
+    return Counter(topics)"""
+    uploads = channel["contentDetails"]["relatedPlaylists"]["uploads"]
+    topics.extend(sample_playlist(youtube, uploads))
+    return Counter(topics)
 
 
 def sample_playlist(youtube, playlist):
@@ -132,14 +149,11 @@ def sample_playlist(youtube, playlist):
        Returns a list of topics present in the first few videos of a given
        playlist.'''
 
-    topics = []
-    videos = []
     results = youtube.playlistItems().list(playlistId=playlist,
-                                           part='contentDetails').execute()
-    for video in results['items']:
-        videos.append(video['contentDetails']['videoId'])
-
-    topics.extend(sample_videos(youtube, ','.join(videos)))
+                                           part='contentDetails',
+                                           maxResults=25).execute()
+    videos = [vid['contentDetails']['videoId'] for vid in results['items']]
+    topics = sample_videos(youtube, ','.join(videos))
     return topics
 
 
@@ -151,7 +165,9 @@ def sample_videos(youtube, videoIds):
        Returns a list of topics present in the given videos.'''
 
     topics = []
-    results = youtube.videos().list(part='topicDetails', id=videoIds).execute()
+    results = youtube.videos().list(part='topicDetails',
+                                    id=videoIds,
+                                    maxResults=25).execute()
     for video in results['items']:
         try:
             topics.extend(video['topicDetails']['topicIds'])
@@ -164,22 +180,37 @@ def sample_videos(youtube, videoIds):
     return topics
 
 
-def get_specific_channel(channel):
+def get_specific_channel(channel, unpack=True):
 
     '''INPUT: string
        OUTPUT:
        ---
        Returns a DataFrame of a single channel's YouTube data, following the
-       same pipeline as get_channel_data.'''
+       same pipeline as get_channel_data. Default is to unpack the topics for
+       this channel, but this can be deactivated to return the Counter in
+       the "topics" column instead.'''
+
+    start = time.time()
 
     DEVELOPER_KEY = os.environ["COLLAB_CLIENT_KEY"]
     YOUTUBE_API_SERVICE_NAME = "youtube"
     YOUTUBE_API_VERSION = "v3"
 
-    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION, developerKey=DEVELOPER_KEY)
-    results = youtube.channels().list(part="snippet,statistics,topicDetails",
+    youtube = build(YOUTUBE_API_SERVICE_NAME,
+                    YOUTUBE_API_VERSION,
+                    developerKey=DEVELOPER_KEY)
+
+    sections = "id,snippet,contentDetails,statistics,topicDetails,brandingSettings"
+    results = youtube.channels().list(part=sections,
                                       id=channel).execute()
-    return process_results(youtube, results)
+    df_row = process_results(youtube, results)
+
+    print time.time() - start
+
+    if (unpack) & (not df_row.empty):
+        return unpack_topics(df_row)
+    else:
+        return df_row
 
 
 def unpack_topics(df):
@@ -193,30 +224,36 @@ def unpack_topics(df):
     df_new = df.copy()
     allTopics = set()
     for row in df_new['topics']:
-        allTopics.update(row)
-    print allTopics
+        allTopics.update(row.keys())
     for topic in allTopics:
         df_new[topic] = 0
-        print topic
     for i, row in enumerate(df_new['topics']):
-        print 'line %d processing' % i
-        for topic in row:
-            df_new[topic][i] = 1
+        for topic, count in row.iteritems():
+            df_new[topic][i] = count
     return df_new.drop(['topics'], axis=1)
 
 
-def write_file(category):
+def write_file(category, s=None):
 
     '''INPUT: string
        ---
        Runs get_channel_data on the given category and unpacks the topics in the
        resulting DataFrame. Then, it writes the entire DataFrame to a csv in the
        data folder of the repository.'''
-
+    if s:
+        print s
+    else:
+        print 'No string.'
     df = get_channel_data(category)
-    df = unpack_topics(df)
-    s = category.replace(' ', '_').replace('&', 'and')
-    df.to_csv('../data/YT'+s+'_base.csv', encoding='utf-8')
+    if df.empty:
+        print category, 'is empty.'
+    else:
+        df = unpack_topics(df)
+        if s:
+            df.to_csv('../data/'+s+'.csv', encoding='utf-8')
+        else:
+            s = category.replace(' ', '_').replace('&', 'and')
+            df.to_csv('../data/YT'+s+'_data.csv', encoding='utf-8')
 
 def _write_user(userId):
 
@@ -228,6 +265,7 @@ def _write_user(userId):
     df = get_specific_channel(userId)
     df = unpack_topics(df)
     df.to_csv('../data/YT_'+userId+'_data.csv', encoding='utf-8')
+
 
 def match_topics(X, y):
 
