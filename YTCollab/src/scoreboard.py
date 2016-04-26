@@ -25,7 +25,6 @@ class Scoreboard(object):
         self.scaled_X = None
         self.y = None
         self.scaled_y = None
-        #self.df = None
         self._scaler = StandardScaler()
         self.replacement = False
         self.scores = None
@@ -42,7 +41,6 @@ class Scoreboard(object):
            also appends y to df as a new entry.'''
 
         self.X = X
-        #self.df = self.X.copy()
         self.find_similar(y)
 
 
@@ -64,10 +62,8 @@ class Scoreboard(object):
 
         self.y = y
         self._scale_X()
-        #self._update()
         self._scale_y()
         self._calc_scores()
-        #self.X = self.df.copy()
 
 
     def _scale_X(self):
@@ -76,19 +72,10 @@ class Scoreboard(object):
            X. This scaling of the numerical values of X is used in determining
            the cosine similarity between y and each row of X.'''
 
+        #removing non-numerical data for the scaler
         prepped_X = self.X.drop(['id','title','country','banner','desc'], axis=1)
         self._scaler.fit(prepped_X)
         self.scaled_X = self._scaler.transform(prepped_X)
-
-
-    # def _update(self):
-    #
-    #     '''Updates the DataFrame df with y. If y is present in df prior to
-    #        updating, it is replaced with the newer information. Doing so removes
-    #        the entry from its position in df and places it at the lowest index.'''
-    #
-    #     self.df = self.df.drop(np.where(self.df['title'] == self.y['title'][0])[0])
-    #     self.df = self.df.append(self.y, ignore_index=True).fillna(0)
 
 
     def _scale_y(self):
@@ -101,6 +88,7 @@ class Scoreboard(object):
            removed from the y DataFrame as not all columns in X are in y, and
            vice versa.'''
 
+        #removing non-numerical data for the scaler
         prepped_y = pd.DataFrame(self.y, columns=self.X.columns).fillna(0)
         self.scaled_y = self._scaler.transform(prepped_y.drop(['id',
                                                                'title',
@@ -120,6 +108,7 @@ class Scoreboard(object):
 
         self.scores = cosine_similarity(self.scaled_X, self.scaled_y).T
         iranks = np.argsort(self.scores)[0][::-1]
+        #Ignore case where entry is already in large dataset
         try:
             dup_i = np.where(self.X['title'] == self.y['title'][0])[0]
         except:

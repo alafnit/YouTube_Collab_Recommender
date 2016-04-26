@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from apiclient.discovery import build
 from collections import Counter
-import time
 
 def _channel_categories():
 
@@ -35,9 +34,9 @@ def get_channel_data(category):
     '''INPUT: string
        OUTPUT: Pandas DataFrame
        ---
-       Creates a DataFrame from YouTube channel data including: channel name,
-       country, subscriber count, video count, view count, and list of recent
-       topics.'''
+       Creates a DataFrame from YouTube channel data including: channel id,
+       channel name, channel description, channel banner url, country,
+       subscriber count, video count, view count, and list of recent topics.'''
 
     DEVELOPER_KEY = os.environ["COLLAB_CLIENT_KEY"]
     YOUTUBE_API_SERVICE_NAME = "youtube"
@@ -122,20 +121,6 @@ def channel_topics(youtube, channel):
         topics.extend(channel["topicDetails"]["topicIds"])
     except:
         pass
-    """playlists = youtube.playlists().list(part='id',
-                                         channelId=channel['id'],
-                                         maxResults=5).execute()
-    for playlist in playlists['items']:
-        topics.extend(sample_playlist(youtube, playlist['id']))
-    return Counter(topics)"""
-    """videos = youtube.search().list(part='id',
-                                   channelId=channel['id'],
-                                   order='date',
-                                   type='video',
-                                   maxResults=25).execute()
-    videoIds = ','.join([vid['id']['videoId'] for vid in videos['items']])
-    topics.extend(sample_videos(youtube, videoIds))
-    return Counter(topics)"""
     uploads = channel["contentDetails"]["relatedPlaylists"]["uploads"]
     topics.extend(sample_playlist(youtube, uploads))
     return Counter(topics)
@@ -190,8 +175,6 @@ def get_specific_channel(channel, unpack=True):
        this channel, but this can be deactivated to return the Counter in
        the "topics" column instead.'''
 
-    start = time.time()
-
     DEVELOPER_KEY = os.environ["COLLAB_CLIENT_KEY"]
     YOUTUBE_API_SERVICE_NAME = "youtube"
     YOUTUBE_API_VERSION = "v3"
@@ -204,8 +187,6 @@ def get_specific_channel(channel, unpack=True):
     results = youtube.channels().list(part=sections,
                                       id=channel).execute()
     df_row = process_results(youtube, results)
-
-    print time.time() - start
 
     if (unpack) & (not df_row.empty):
         return unpack_topics(df_row)
