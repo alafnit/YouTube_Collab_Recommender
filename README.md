@@ -20,3 +20,10 @@ In working together, creators end up combining their audiences and trading subsc
 6. For the purpose of recommendation an individual user is extracted using the exact same method but kept separate from the other data sets.
 7. The original base data set for any single category is scaled using the StandardScaler from sklearn, and after the scaler has been fitted with the training data, the individual user is scaled as well. The cosine similarity from sklearn is then calculated between the individual user and each other channel in the base DataFrame.
 8. The results are sorted by cosine similarity and returned in the form of titles, ids, banners, and descriptions of their respective channels. If the individual channel occurs in the dataset itself, it is removed from the results so that perfect matches are avoided.
+9. The results are used by a flask web interface to provide a broad selection of channels that match with the channel given by the user.
+
+## Data
+
+Data is in pandas DataFrame format, and large channel sets are separated by category in csv format in the data folder. Each channel is stored as a row of a DataFrame, identified by it's id, title, description, country, banner url, sub count, video count, view count, and the frequency with which a topic occurs within that channels first 25 videos.
+
+It may be possible to utilize GraphLab functionality to analyze results and make recommendations at high speeds using channel ids as user ids and topic frequency as item ids, but because of the density of the data column wise, SFrame often took too long to initialize/load.
